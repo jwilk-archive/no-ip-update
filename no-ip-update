@@ -1,0 +1,75 @@
+#!/usr/bin/python3
+
+# Copyright © 2013 Jakub Wilk <jwilk@jwilk.net>
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the “Software”), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+import argparse
+import functools
+import getpass
+import netrc
+import ssl
+import urllib
+
+import urllib3
+import requests
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-u', '--user', metavar='<user>')
+    ap.add_argument('-p', '--password', metavar='<password>')
+    ap.add_argument('--netrc', action='store_true')
+    ap.add_argument('--ip', metavar='<ip>')
+    ap.add_argument('--debug', action='store_true')
+    ap.add_argument('hosts', metavar='<host>', nargs='+')
+    options = ap.parse_args()
+    ssl.wrap_socket = functools.partial(ssl.wrap_socket, ssl_version=ssl.PROTOCOL_TLSv1)
+    if options.debug:
+        urllib3.add_stderr_logger()
+    if options.netrc:
+        authinfo = netrc.netrc().authenticators('dynupdate.no-ip.com')
+        if authinfo is None:
+            ap.error('missing netrc entry for dynupdate.no-ip.com')
+        (user, _, password) = authinfo
+        if (options.user is not None) and (user != options.user):
+            ap.error('netrc user mismatch: {} != {}'.format(user, options.user))
+        options.user = user
+        options.password = password
+    if options.user is None:
+        options.user = getpass.getuser()
+    if options.password is None:
+        options.password = getpass.getpass('dynupdate.no-ip.com password for {}: '.format(options.user))
+    session = requests.Session()
+    session.verify = True
+    session.trust_env = False
+    session.headers['User-Agent'] = 'no-ip-update (jwilk@jwilk.net)'
+    for host in options.hosts:
+        url = 'https://dynupdate.no-ip.com/nic/update?hostname=' + urllib.parse.quote(host)
+        if options.ip is not None:
+            url += '&myip=' + urllib.parse.quote(options.ip)
+        response = session.get(url, auth=(options.user, options.password))
+        response.raise_for_status()
+        text = response.text
+        if not text.startswith('good '):
+            print('{host}: {text}'.format(host=host, text=text))
+
+if __name__ == '__main__':
+    main()
+
+# vim:ts=4 sw=4 et
