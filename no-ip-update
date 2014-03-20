@@ -58,7 +58,7 @@ def main():
     session = requests.Session()
     session.verify = True
     session.trust_env = False
-    session.headers['User-Agent'] = 'https://bitbucket.org/jwilk/no-ip-update'
+    session.headers['User-Agent'] = 'no-ip-update (https://bitbucket.org/jwilk/no-ip-update)'
     for host in options.hosts:
         url = 'https://dynupdate.no-ip.com/nic/update?hostname=' + urllib.parse.quote(host)
         if options.ip is not None:
