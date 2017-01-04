@@ -21,12 +21,27 @@
 # SOFTWARE.
 
 import argparse
+import base64
 import getpass
+import http.client
 import netrc
-import urllib
+import urllib.parse
+import urllib.request
 
-import urllib3
-import requests
+http_headers = {
+    'User-Agent': 'no-ip-update (https://github.com/jwilk/no-ip-update)'
+}
+
+def wget(url, *, user, password):
+    auth = '{user}:{password}'.format(user=user, password=password)
+    auth = auth.encode('ASCII')
+    auth = base64.standard_b64encode(auth)
+    auth = auth.decode('ASCII')
+    headers = dict(http_headers)
+    headers['Authorization'] = 'Basic {auth}'.format(auth=auth)
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, cadefault=True) as fp:
+        return fp.read()
 
 def main():
     ap = argparse.ArgumentParser()
@@ -38,7 +53,7 @@ def main():
     ap.add_argument('hosts', metavar='<host>', nargs='+')
     options = ap.parse_args()
     if options.debug:
-        urllib3.add_stderr_logger()
+        http.client.HTTPConnection.debuglevel = 1
     if options.netrc:
         authinfo = netrc.netrc().authenticators('dynupdate.no-ip.com')
         if authinfo is None:
@@ -52,17 +67,12 @@ def main():
         options.user = getpass.getuser()
     if options.password is None:
         options.password = getpass.getpass('dynupdate.no-ip.com password for {}: '.format(options.user))
-    session = requests.Session()
-    session.verify = True
-    session.trust_env = False
-    session.headers['User-Agent'] = 'no-ip-update (https://github.com/jwilk/no-ip-update)'
     for host in options.hosts:
         url = 'https://dynupdate.no-ip.com/nic/update?hostname=' + urllib.parse.quote(host)
         if options.ip is not None:
             url += '&myip=' + urllib.parse.quote(options.ip)
-        response = session.get(url, auth=(options.user, options.password))
-        response.raise_for_status()
-        text = response.text
+        text = wget(url, user=options.user, password=options.password)
+        text = text.decode('ASCII').strip()
         if not text.startswith('good '):
             print('{host}: {text}'.format(host=host, text=text))
 
