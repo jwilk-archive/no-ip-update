@@ -21,10 +21,8 @@
 # SOFTWARE.
 
 import argparse
-import functools
 import getpass
 import netrc
-import ssl
 import urllib
 
 import urllib3
@@ -39,7 +37,6 @@ def main():
     ap.add_argument('--debug', action='store_true')
     ap.add_argument('hosts', metavar='<host>', nargs='+')
     options = ap.parse_args()
-    ssl.wrap_socket = functools.partial(ssl.wrap_socket, ssl_version=ssl.PROTOCOL_TLSv1)
     if options.debug:
         urllib3.add_stderr_logger()
     if options.netrc:
